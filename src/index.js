@@ -156,8 +156,9 @@ function createLoadableComponent(loadFn, options) {
 
     _loadModule() {
       if (this.context.loadable && Array.isArray(opts.modules)) {
-        opts.modules.forEach(moduleName => {
-          this.context.loadable.report(moduleName);
+        opts.modules.forEach((moduleName, i) => {
+          const webpackChunkName = (opts.webpackChunkNames || [])[i];
+          this.context.loadable.report(moduleName, webpackChunkName);
         });
       }
 

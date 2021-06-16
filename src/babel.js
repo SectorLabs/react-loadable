@@ -1,9 +1,12 @@
 export default function({ types: t, template }) {
   return {
     visitor: {
-      ImportDeclaration(path) {
+      ImportDeclaration(path, stats) {
+        const highOrderComponentsSources = stats.opts.hocSources || ['@sector-labs/react-loadable'];
+        const highOrderComponentsIdentifiers = [...(stats.opts.hocIdentifiers || []), 'Map'];
         let source = path.node.source.value;
-        if (source !== 'react-loadable') return;
+
+        if (!highOrderComponentsSources.includes(source)) return;
 
         let defaultSpecifier = path.get('specifiers').find(specifier => {
           return specifier.isImportDefaultSpecifier();
@@ -17,13 +20,15 @@ export default function({ types: t, template }) {
         binding.referencePaths.forEach(refPath => {
           let callExpression = refPath.parentPath;
 
-          if (
-            callExpression.isMemberExpression() &&
-            callExpression.node.computed === false &&
-            callExpression.get('property').isIdentifier({ name: 'Map' })
-          ) {
-            callExpression = callExpression.parentPath;
-          }
+          highOrderComponentsIdentifiers.forEach(identifier => {
+              if (
+                callExpression.isMemberExpression() &&
+                callExpression.node.computed === false &&
+                callExpression.get('property').isIdentifier({ name: identifier })
+              ) {
+                callExpression = callExpression.parentPath;
+              }
+          });
 
           if (!callExpression.isCallExpression()) return;
 
@@ -82,6 +87,24 @@ export default function({ types: t, template }) {
               t.arrayExpression(
                 dynamicImports.map(dynamicImport => {
                   return dynamicImport.get('arguments')[0].node;
+                })
+              )
+            )
+          );
+
+          propertiesMap.loader.insertAfter(
+            t.objectProperty(
+              t.identifier('webpackChunkNames'),
+              t.arrayExpression(
+                dynamicImports.map(dynamicImport => {
+                    const { leadingComments } = dynamicImport.get('arguments')[0].node;
+                    const webpackChunkName = (leadingComments || [])
+                        .map(leadingComment => leadingComment.value)
+                        .filter(comment => /webpackChunkName/.test(comment))
+                        .map(comment => comment.split(':')[1].replace(/["']/g, '').trim())
+                        [0];
+
+                    return t.stringLiteral(webpackChunkName || '');
                 })
               )
             )
